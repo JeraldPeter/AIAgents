@@ -2,12 +2,17 @@ import os
 from typing import List, Dict, Any
 from google.adk.agents import LlmAgent,SequentialAgent
 from google.adk.tools import google_search
+# Add support for PDF Generation
+from fpdf import FPDF
+import re
+
 
 # --- Configuration ---
 # Ensure you have your GOOGLE_API_KEY set in your environment
 #os.environ["GOOGLE_API_KEY"] = "YOUR_KEY_HERE"
 
-MODEL_NAME = "gemini-2.5-pro" # Using Pro for better reasoning capabilities
+#MODEL_NAME = "gemini-2.5-pro" # Using Pro for better reasoning capabilities
+MODEL_NAME = "gemini-3-pro-preview"
 
 # --- Agent Definitions ---
 
@@ -53,7 +58,7 @@ qualitative_agent = LlmAgent(
     CITATIONS & SOURCE REFERENCES SECTION:
     
     For EVERY claim, metric, and observation in your analysis, include inline citations using this format:
-    [Source: Document Type | Name | Date | URL/Reference]
+    [Source: Document Type | Name | Date | URL/Reference | Page X-X]    
     
     CITATION REQUIREMENTS BY ANALYSIS AREA:
     
@@ -725,6 +730,49 @@ cio_agent = LlmAgent(
     """
 )
 
+# 4. Report Agent
+# Focus: Generate Markdown Report
+
+def create_markdown_report(text_content: str, filename: str) -> str:
+    """
+    Saves the provided text content (which is already in Markdown) to a file.
+    
+    Args:
+        text_content: The full markdown text to be saved.
+        filename: The name of the file to save (e.g., 'report.md').
+        
+    Returns:
+        A message indicating success or failure.
+    """
+    try:
+        # Ensure filename ends with .md
+        if not filename.endswith('.md'):
+            filename += '.md'
+            
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(text_content)
+            
+        return f"Report saved successfully: {filename}"
+    except Exception as e:
+        return f"Error saving report: {str(e)}"
+
+report_agent = LlmAgent(
+    name="ReportAgent",
+    model=MODEL_NAME,
+    tools=[create_markdown_report],
+    instruction="""
+    You are the Report Agent. Your responsibility is to collect the results from ALL previous agents (Qualitative Analyst, Quantitative Analyst, Valuation Analyst, and CIO Agent) and save them as a comprehensive Markdown report using the `create_markdown_report` tool.
+    
+    The input you receive contains the full conversation history, which is already formatted in Markdown (including tables, links, and headers). You must preserve this exact formatting.
+    
+    When calling `create_markdown_report`:
+    1. Pass the FULL text of the conversation history/analysis.
+    2. Choose a filename that includes the stock ticker, for example "AMARAJABAT_Investment_Report.md". If the ticker is unknown, use "Investment_Report.md".
+    
+    After saving the report, inform the user that the Markdown report is ready and avaliable for review !
+    """
+)
+
 # 4. Agent_Workflow Agent
 # Focus: Managing the iterative loop
 AgentWorkflow = SequentialAgent(
@@ -738,7 +786,8 @@ AgentWorkflow = SequentialAgent(
         qualitative_agent, 
         quantitative_agent, 
         valuation_agent,
-        cio_agent],
+        cio_agent,
+        report_agent],
 
 )
 
@@ -765,7 +814,10 @@ orchestrator_agent = LlmAgent(
     STEP 4: Synthesize all reports into a Final Investment Summary using "cio_agent" sub agent.
     - Combine all the reports and structure: Executive Summary, Moat Analysis, Financial Health, Valuation, and Final Verdict (Strong Buy, Buy, Hold, Avoid).
     
-    Be extremely critical. We only want to invest in the best businesses at the best prices. Your tone should be more Professional, prudent, and conservative. Prioritize capital protection over speculation.
+    STEP 5: Generate a professionally formatted PDF report using "report_agent" sub agent.
+    - The PDF should include all analyses and the final investment memo.
+
+    Be extremely critical. We only want to invest in the best businesses at the best prices. Your tone should be more Professional, prudent, and conservative. Prioritize capital protection over speculation. You must communicate only "English" and avoid jargon.
     """
 )
 root_agent = orchestrator_agent
