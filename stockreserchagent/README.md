@@ -30,35 +30,47 @@ This framework transforms the methodologies from **Zerodha's Varsity Fundamental
 
 ### Agent Architecture Overview
 
+### Agent Architecture Overview
 The system implements a **Sequential Multi-Agent Architecture** with hierarchical gating:
 
+```mermaid
+graph TD
+    User[User Input: Ticker] --> Orchestrator[Orchestrator Agent: Lead Research Analyst]
+    Orchestrator --> Gate1{Gate 1: Qualitative Analysis}
+    
+    subgraph "Stage 1: Business Quality"
+        Gate1 -->|Run| QualAgent[Qualitative Analyst Agent]
+        QualAgent -->|Verdict: GO| Gate2{Gate 2: Quantitative Analysis}
+        QualAgent -->|Verdict: NO-GO| Reject[Terminate & Reject]
+    end
+    
+    subgraph "Stage 2: Financial Health"
+        Gate2 -->|Run| QuantAgent[Quantitative Analyst Agent]
+        QuantAgent -->|Verdict: PASS| Gate3{Gate 3: Valuation}
+        QuantAgent -->|Verdict: FAIL| Reject
+    end
+    
+    subgraph "Stage 3: Valuation"
+        Gate3 -->|Run| ValAgent[Valuation Analyst Agent]
+        ValAgent --> CIO[CIO Agent: Final Synthesis]
+    end
+    
+    subgraph "Stage 4: Reporting"
+        CIO --> ReportAgent[Report Agent]
+        ReportAgent -->|Generate| MD[Markdown Report]
+    end
+    
+    Reject --> ReportAgent
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                  ORCHESTRATOR AGENT                              │
-│         (Head of Research - Manages Workflow)                    │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                    ┌──────────┼──────────┐
-                    │          │          │
-        ┌───────────▼─┐  ┌────▼────────┐ ┌──────────▼──────────┐
-        │   GATE 1    │  │   GATE 2    │ │     GATE 3          │
-        │ QUALITATIVE │  │QUANTITATIVE │ │   VALUATION         │
-        │   ANALYST   │  │   ANALYST   │ │   ANALYST           │
-        │   AGENT     │  │   AGENT     │ │   AGENT             │
-        └──────┬──────┘  └────┬────────┘ └──────────┬──────────┘
-               │               │                     │
-               └───────────────┼─────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   CIO AGENT         │
-                    │  (Final Synthesis)  │
-                    └─────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │ INVESTMENT DECISION │
-                    │  RECOMMENDATION     │
-                    └─────────────────────┘
-```
+
+### Agent Workflow
+The workflow is designed to be efficient and fail-fast:
+
+1.  **Qualitative Analysis**: Checks business quality. If bad, stop.
+2.  **Quantitative Analysis**: Checks financial health. If weak, stop.
+3.  **Valuation Analysis**: Determines fair price.
+4.  **CIO Synthesis**: Combines all insights into a decision.
+5.  **Reporting**: Generates a downloadable Markdown report.
 Agent Workflow:-
 
 ![Alt Text](./docs/images/Agentworkflow.jpg "Agentworkflow")
@@ -235,7 +247,21 @@ Agent Workflow:-
 
 ---
 
-### 5. **Orchestrator Agent** (Lead Research Analyst)
+### 5. **Report Agent** (Documentation & Formatting)
+
+**Purpose**: Collects all analyses and the final investment memo to generate a comprehensive, downloadable report.
+
+**Key Responsibilities**:
+- **Aggregation**: Gathers full conversation history from all previous agents.
+- **Formatting**: Preserves rich Markdown formatting (tables, links, bolding).
+- **Generation**: Saves the compiled analysis as a `.md` file for offline viewing and sharing.
+
+**Output**:
+- A professionally formatted Markdown file (e.g., `AMARAJABAT_Investment_Report.md`) containing the complete research trail.
+
+---
+
+### 6. **Orchestrator Agent** (Lead Research Analyst)
 
 **Purpose**: Manages the entire workflow sequentially.
 
@@ -254,6 +280,9 @@ STEP 3: Run Valuation Analyst
 
 STEP 4: Run CIO Agent
    └─ Synthesize all reports into final investment memo
+
+STEP 5: Run Report Agent
+   └─ Generate comprehensive Markdown report
 ```
 
 **Resource Management**:
@@ -366,7 +395,203 @@ The system returns:
 2. **Quantitative Analysis Report** (Gate 2)
 3. **Valuation Analysis Report** (Gate 3)
 4. **CIO Investment Memo** (Final synthesis)
-5. **Complete Citation Trail** (All sources with links)
+5. **Downloadable Markdown Report** (Complete analysis with links)
+6. **Complete Citation Trail** (All sources with links)
+
+### Working Demo Screenshots refer this below file
+[Demo Screenshots](./docs/DemoScreenshots.pdf)
+
+---
+
+## ⚠️ IMPORTANT DISCLAIMER
+
+### This Tool Is For Demonstration & Educational Purposes Only
+
+**CRITICAL NOTICE**: The Stock Research Agent is designed to **DEMONSTRATE AI AGENT CAPABILITIES** in financial analysis. It is **NOT** a substitute for professional financial advice, and **SHOULD NOT** be used as the sole basis for investment decisions.
+
+### Key Limitations & Risks
+
+1. **AI Hallucinations & Errors**
+   - Large Language Models (LLMs) are prone to generating plausible-sounding but inaccurate data
+   - All analysis must be independently verified against original source documents
+   - The model may misinterpret financial statements or make calculation errors
+
+2. **Data Quality & Completeness**
+   - Source data may be incomplete, outdated, or incorrect
+   - Web search results may be misleading or from unreliable sources
+   - Historical data may not reflect current market conditions
+   - Financial filings may contain errors or revisions not yet reflected
+
+3. **Valuation Assumptions**
+   - Growth rate assumptions are inherently uncertain
+   - Terminal growth rates and discount rates are subject to significant estimation error
+   - DCF models are sensitive to small changes in inputs, potentially leading to vastly different valuations
+   - Market conditions, competitive dynamics, and regulatory changes can invalidate assumptions
+
+4. **Market Risk**
+   - Past performance does not guarantee future results
+   - Stock prices can be affected by unpredictable macro events, market sentiment, and unforeseen crises
+   - Even well-analyzed companies can underperform due to execution failures or industry disruptions
+
+5. **Insufficient Human Judgment**
+   - Automated analysis lacks the nuance and contextual understanding of experienced analysts
+   - The system cannot account for qualitative factors that emerge through deep management interaction
+   - AI agents cannot replace human judgment, skepticism, and due diligence
+
+### What This Tool Is NOT
+
+❌ **NOT** financial advice
+❌ **NOT** an investment recommendation
+❌ **NOT** a replacement for qualified financial advisors
+❌ **NOT** a guarantee of returns or protection from losses
+❌ **NOT** suitable for making standalone investment decisions
+❌ **NOT** appropriate for risk-averse or first-time investors
+
+### What This Tool IS
+
+✅ **IS** an educational demonstration of AI agent capabilities
+✅ **IS** a research aid to supplement human analysis
+✅ **IS** a framework for systematizing fundamental analysis
+✅ **IS** a tool for generating initial screening criteria
+✅ **IS** an example of multi-agent orchestration in finance
+
+---
+
+## 📋 MANDATORY STEPS BEFORE USING FOR INVESTMENT DECISIONS
+
+Before acting on ANY recommendation from this system:
+
+1. **Consult a Qualified Financial Advisor**
+   - Speak with a Certified Financial Planner (CFP) or registered investment advisor
+   - Ensure advisor understands your risk tolerance, investment horizon, and financial goals
+   - Get personalized advice based on your complete financial situation
+
+2. **Independent Verification**
+   - Download original financial documents from company websites or stock exchange (NSE/BSE)
+   - Manually verify all calculations and metrics presented
+   - Cross-check valuation assumptions against multiple sources
+   - Read full annual reports, not just summaries
+
+3. **Additional Research**
+   - Read industry reports from recognized research firms
+   - Follow company-specific news from reputable financial media
+   - Listen to earnings calls and management presentations
+   - Understand competitive positioning within the industry
+
+4. **Risk Assessment**
+   - Determine your personal risk tolerance and investment horizon
+   - Consider your overall portfolio composition and diversification
+   - Account for emergency fund needs and existing obligations
+   - Evaluate impact of potential 50%+ loss on your financial security
+
+5. **Tax & Legal Consultation**
+   - Consult tax professionals on capital gains implications
+   - Understand regulatory requirements and compliance needs
+   - Consider impact of holding period on tax efficiency
+   - Ensure investment complies with any organizational policies
+
+---
+
+## 🔒 User Responsibility & Accountability
+
+**By using this Stock Research Agent, you acknowledge that:**
+
+- You have read and understood this disclaimer in full
+- You understand the limitations and risks outlined above
+- You take FULL RESPONSIBILITY for all investment decisions
+- You will NOT rely solely on this tool for investment choices
+- You will consult qualified professionals before investing
+- You accept ALL financial losses from decisions informed by this tool
+- You understand that LLMs can and do make mistakes
+- You will independently verify all analysis and calculations
+- You hold developers and operators harmless for any financial losses
+
+---
+
+## 🤝 Contact & Professional Guidance
+
+### For Investment Decisions, Contact:
+- **Registered Investment Advisors** (SEBI registered)
+- **Certified Financial Planners** (CFP or equivalent)
+- **Wealth Management Professionals**
+- **Stock Brokers** (for transaction execution)
+- **Tax Consultants** (for tax optimization)
+
+### Regulatory Bodies (India):
+- **SEBI** (Securities and Exchange Board of India)
+- **Stock Exchanges**: NSE (National Stock Exchange), BSE (Bombay Stock Exchange)
+- **Reserve Bank of India** (RBI) - for macro context
+
+### Red Flags - Avoid These:
+- ⛔ Anyone guaranteeing investment returns
+- ⛔ Unlicensed "financial advisors"
+- ⛔ Pressure to invest quickly without due diligence
+- ⛔ Tips from social media or unverified sources
+- ⛔ "Guaranteed profits" schemes
+- ⛔ High pressure sales tactics
+
+---
+
+## 📄 License & Attribution
+
+This project is provided for educational purposes. 
+
+**Attribution**: Built on methodologies from Zerodha Varsity Fundamental Analysis Module
+
+**License**:  Apache 2.0
+
+---
+
+## 🙏 Final Word
+
+This Stock Research Agent represents the frontier of AI in financial analysis. While powerful, it is a **tool**, not a replacement for human judgment. The most successful investors combine quantitative rigor with qualitative insight, market experience, and disciplined risk management.
+---
+
+## 🚀 How to Use the Stock Research Agent
+
+### Installation & Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd adk-samples/python/agents/stockreserchagent
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install google-adk
+   ```
+
+3. **Configure API Keys in .env file**:
+   ```bash
+   export GOOGLE_API_KEY="your-google-api-key"
+   ```
+
+4. **Run the agent using ADK WEB**:
+   ```
+    adk web 
+   ```
+   Open the url :- http://127.0.0.1:8000/dev-ui/ and select the agent folder
+   
+   ![Alt Text](./docs/images/DropDownView.jpg "DropDownView")
+   
+
+### Input Format
+
+Provide the orchestrator agent with a stock ticker or company name:
+- "Analyze INFY for investment"
+- "Research WIPRO stock"
+- "Evaluate HDFC Bank for buying"
+
+### Output Format
+
+The system returns:
+1. **Qualitative Analysis Report** (Gate 1)
+2. **Quantitative Analysis Report** (Gate 2)
+3. **Valuation Analysis Report** (Gate 3)
+4. **CIO Investment Memo** (Final synthesis)
+5. **Downloadable Markdown Report** (Complete analysis with links)
+6. **Complete Citation Trail** (All sources with links)
 
 ### Working Demo Screenshots refer this below file
 [Demo Screenshots](./docs/DemoScreenshots.pdf)
@@ -520,8 +745,8 @@ This Stock Research Agent represents the frontier of AI in financial analysis. W
 
 ---
 
-**Last Updated**: November 27, 2025
-**Version**: 1.0
+**Last Updated**: November 29, 2025
+**Version**: 1.1
 **Status**: Educational & Demonstration
 
 ---
@@ -530,3 +755,4 @@ This Stock Research Agent represents the frontier of AI in financial analysis. W
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 27-Nov-2025 | Initial release |
+| 1.1 | 29-Nov-2025 | Added Report Agent for Markdown report generation, updated architecture diagram to Mermaid format |
