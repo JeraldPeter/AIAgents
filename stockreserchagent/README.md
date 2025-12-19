@@ -30,18 +30,21 @@ This framework transforms the methodologies from **Zerodha's Varsity Fundamental
 
 ### Agent Architecture Overview
 
-### Agent Architecture Overview
-The system implements a **Sequential Multi-Agent Architecture** with hierarchical gating:
+The system implements a **Sequential-Iterative Multi-Agent Architecture** with batch processing for multiple stocks:
 
 ```mermaid
 graph TD
-    User[User Input: Ticker] --> Orchestrator[Orchestrator Agent: Lead Research Analyst]
-    Orchestrator --> Gate1{Gate 1: Qualitative Analysis}
+    User[User Input: Multiple Tickers] --> Extractor[Stock Extractor Agent]
+    Extractor -->|Extract Tickers| Loop[Orchestrator Loop Agent]
+    
+    Loop -->|Per Ticker| Batch[Batch Processor<br/>- Clear State<br/>- Get Next Ticker]
+    
+    Batch -->|Fresh State| Gate1{Gate 1: Qualitative Analysis}
     
     subgraph "Stage 1: Business Quality"
         Gate1 -->|Run| QualAgent[Qualitative Analyst Agent]
         QualAgent -->|Verdict: GO| Gate2{Gate 2: Quantitative Analysis}
-        QualAgent -->|Verdict: NO-GO| Reject[Terminate & Reject]
+        QualAgent -->|Verdict: NO-GO| Reject[Terminate Stock Analysis]
     end
     
     subgraph "Stage 2: Financial Health"
@@ -61,19 +64,24 @@ graph TD
     end
     
     Reject --> ReportAgent
+    ReportAgent -->|Next Ticker| Batch
+    
+    Batch -->|No More Tickers| Complete[All Stocks Processed]
 ```
 
 ### Agent Workflow
-The workflow is designed to be efficient and fail-fast:
+The workflow is designed to be efficient, fail-fast, and handle multiple stocks:
 
-1.  **Qualitative Analysis**: Checks business quality. If bad, stop.
-2.  **Quantitative Analysis**: Checks financial health. If weak, stop.
-3.  **Valuation Analysis**: Determines fair price.
-4.  **CIO Synthesis**: Combines all insights into a decision.
-5.  **Reporting**: Generates a downloadable Markdown report.
-Agent Workflow:-
-
-![Alt Text](./docs/images/Agentworkflow.jpg "Agentworkflow")
+1.  **Stock Extraction**: Parse user input and extract all stock tickers
+2.  **Iterative Processing Loop**: Process each stock independently with clear state management
+3.  **Batch Management**: Clear context between iterations to prevent cross-contamination
+4.  **Per-Stock Analysis**: For each ticker:
+    - **Qualitative Analysis**: Checks business quality. If bad, proceed to reporting.
+    - **Quantitative Analysis**: Checks financial health. If weak, proceed to reporting.
+    - **Valuation Analysis**: Determines fair price.
+    - **CIO Synthesis**: Combines all insights into a decision.
+    - **Reporting**: Generates a downloadable Markdown report.
+5.  **Loop Control**: Iterate until all stocks are processed
 
 ---
 
@@ -255,40 +263,104 @@ Agent Workflow:-
 - **Aggregation**: Gathers full conversation history from all previous agents.
 - **Formatting**: Preserves rich Markdown formatting (tables, links, bolding).
 - **Generation**: Saves the compiled analysis as a `.md` file for offline viewing and sharing.
+- **State Preservation**: Ensures each stock's report is saved independently with correct ticker name.
 
 **Output**:
-- A professionally formatted Markdown file (e.g., `AMARAJABAT_Investment_Report.md`) containing the complete research trail.
+- A professionally formatted Markdown file (e.g., `INFY_Investment_Report.md`, `WIPRO_Investment_Report.md`) containing the complete research trail for each stock.
 
 ---
 
-### 6. **Orchestrator Agent** (Lead Research Analyst)
+### 6. **Stock Extractor Agent** (Ticker Extraction)
 
-**Purpose**: Manages the entire workflow sequentially.
+**Purpose**: Parses user input to extract multiple stock tickers.
+
+**Key Responsibilities**:
+- **Ticker Parsing**: Identifies stock symbols from natural language input
+- **Cleanup**: Filters out noise words (DO, ANALYSIS, ON, STOCK, etc.)
+- **Storage**: Saves extracted tickers to session state for batch processing
+
+**Input Examples**:
+- "Analyze INFY, WIPRO, TCS for investment"
+- "Research HDFC Bank, Kotak Mahindra, ICICI Bank stocks"
+- "Evaluate RELIANCE & JIOFINANCE for buying"
+
+**Output**:
+- List of clean, uppercase ticker symbols ready for sequential processing
+
+---
+
+### 7. **Batch Processor Agent** (Orchestration & State Management)
+
+**Purpose**: Manages the stock processing queue and ensures clean state for each iteration.
+
+**Key Responsibilities**:
+- **Queue Management**: Retrieves next ticker from pending stocks list
+- **State Clearing**: Clears previous analysis data from session state to prevent context contamination
+- **Handoff**: Passes clean ticker context to qualitative agent
+- **Loop Control**: Signals termination when all stocks are processed
+
+**State Variables Managed**:
+```python
+session.state["pending_stocks"]        # List of remaining stocks
+session.state["current_ticker"]        # Current stock being analyzed
+session.state["completed_reports"]     # Storage for final reports
+session.state["qualitative_findings"]  # Cleared each iteration
+session.state["quantitative_findings"] # Cleared each iteration
+session.state["valuation_findings"]    # Cleared each iteration
+session.state["cio_decision"]         # Cleared each iteration
+```
 
 **Workflow Logic**:
 ```
-STEP 1: Run Qualitative Analyst
-   ├─ If NO-GO → STOP, Issue REJECT
-   └─ If GO → Continue to Step 2
+FOR EACH TICKER in pending_stocks:
+   ├─ Clear previous analysis from state
+   ├─ Set current_ticker = next stock
+   ├─ Hand off to Qualitative Analyst
+   ├─ Run Quantitative Analyst (if Qualitative = GO)
+   ├─ Run Valuation Analyst (if Quantitative = PASS)
+   ├─ Run CIO Agent (synthesis)
+   ├─ Run Report Agent (save markdown file)
+   └─ Loop back for next ticker
 
-STEP 2: Run Quantitative Analyst
-   ├─ If FAIL → STOP, Issue REJECT
-   └─ If PASS → Continue to Step 3
+WHEN pending_stocks is empty:
+   └─ Escalate (terminate loop)
+```
 
-STEP 3: Run Valuation Analyst
-   └─ Generate valuation recommendation
+**Benefits of Batch Processing**:
+- ✅ Processes multiple stocks in one session
+- ✅ Prevents context bloat from accumulated analysis
+- ✅ Each stock gets a fresh, independent analysis
+- ✅ Reduces hallucination risks from context overflow
+- ✅ Generates individual reports for each stock
 
-STEP 4: Run CIO Agent
-   └─ Synthesize all reports into final investment memo
+---
 
-STEP 5: Run Report Agent
-   └─ Generate comprehensive Markdown report
+### 8. **Root Orchestrator** (Sequential Agent)
+
+**Purpose**: Master controller that manages the two-phase workflow.
+
+**Workflow**:
+```
+PHASE 1: Extraction
+   └─ Run Stock Extractor Agent
+      └─ Output: List of tickers
+
+PHASE 2: Iterative Analysis Loop
+   └─ Run LoopAgent (Orchestrator Loop)
+      └─ FOR EACH ticker:
+         ├─ Batch Processor
+         ├─ Qualitative Analyst (Gate 1)
+         ├─ Quantitative Analyst (Gate 2)
+         ├─ Valuation Analyst (Gate 3)
+         ├─ CIO Agent (Synthesis)
+         └─ Report Agent (Save Report)
 ```
 
 **Resource Management**:
 - Avoids wasting computational resources on weak companies
 - Early termination if fundamental criteria not met
 - Conserves API calls through intelligent gating
+- Clear state management prevents memory overflow
 
 ---
 
@@ -314,9 +386,7 @@ The Zerodha Varsity fundamental analysis series provides the theoretical foundat
 2. **Standardize** analysis across companies for consistency
 3. **Cite** all sources for full transparency and traceability
 4. **Gate** the analysis process to ensure quality control
-5. **Synthesize** findings into actionable investment decisions
-
----
+5. **Synthesize** findings into actionable investment decisions---
 
 ## 📊 Citation & Source Tracking
 
@@ -383,23 +453,138 @@ Each agent provides comprehensive source tables:
 
 ### Input Format
 
-Provide the orchestrator agent with a stock ticker or company name:
+You can provide the root agent with **one or multiple stock tickers** in a single request:
+
+#### Single Stock:
 - "Analyze INFY for investment"
 - "Research WIPRO stock"
 - "Evaluate HDFC Bank for buying"
 
+#### Multiple Stocks (Batch Processing):
+- "Analyze INFY, WIPRO, TCS for investment"
+- "Research HDFC Bank, Kotak Mahindra, ICICI Bank stocks"
+- "Evaluate RELIANCE & JIOFINANCE for buying"
+- "Screen these: BAJAJFINSV, HCLTECH, NESTLEIND"
+
+**The system will:**
+1. Extract all tickers from your input
+2. Process each stock independently through the full 4-gate pipeline
+3. Generate individual markdown reports for each stock
+
 ### Output Format
 
-The system returns:
-1. **Qualitative Analysis Report** (Gate 1)
-2. **Quantitative Analysis Report** (Gate 2)
-3. **Valuation Analysis Report** (Gate 3)
-4. **CIO Investment Memo** (Final synthesis)
-5. **Downloadable Markdown Report** (Complete analysis with links)
-6. **Complete Citation Trail** (All sources with links)
+For **each stock processed**, the system returns:
+
+1. **Stock Extraction Report**
+   - Identified tickers
+   - Parsed from user input
+
+2. **Qualitative Analysis Report** (Gate 1)
+   - Management Integrity Score
+   - Governance Assessment
+   - Moat Analysis
+   - Red Flags
+   - Verdict (GO/NO-GO)
+   - Complete citation trail
+
+3. **Quantitative Analysis Report** (Gate 2)
+   - 10-Point Checklist Score
+   - 5-Year CAGR Analysis
+   - DuPont Breakdown
+   - Cash Flow Assessment
+   - Verdict (PASS/FAIL)
+   - Complete source references
+
+4. **Valuation Analysis Report** (Gate 3)
+   - Relative Valuation Status
+   - DCF Intrinsic Value
+   - Margin of Safety Calculation
+   - Buy Price & Recommendation
+   - Complete valuation citations
+
+5. **CIO Investment Memo** (Final Synthesis)
+   - Executive Summary
+   - Gate-wise Decision Rationale
+   - Financial Health Scorecard
+   - Risk Warnings & Catalysts
+   - Final Recommendation (STRONG BUY / BUY / HOLD / SELL / REJECT)
+
+6. **Downloadable Markdown Report**
+   - Filename: `{TICKER}_Investment_Report.md`
+   - Complete analysis with all citations
+   - Ready for offline viewing and sharing
+   - Professional formatting with tables and links
+
+### Batch Processing Example
+
+**Input:** "Analyze INFY and TCS for investment"
+
+**Execution Flow:**
+```
+1. Stock Extractor → Identifies: [INFY, TCS]
+2. Loop Agent - Iteration 1:
+   ├─ Batch Processor → Clear state, set ticker = INFY
+   ├─ Qualitative Analyst → INFY analysis
+   ├─ Quantitative Analyst → INFY financial health
+   ├─ Valuation Analyst → INFY fair value
+   ├─ CIO Agent → INFY recommendation
+   └─ Report Agent → Save INFY_Investment_Report.md
+
+3. Loop Agent - Iteration 2:
+   ├─ Batch Processor → Clear state, set ticker = TCS
+   ├─ Qualitative Analyst → TCS analysis
+   ├─ Quantitative Analyst → TCS financial health
+   ├─ Valuation Analyst → TCS fair value
+   ├─ CIO Agent → TCS recommendation
+   └─ Report Agent → Save TCS_Investment_Report.md
+
+4. Loop Termination → All stocks processed
+```
+
+**Output Generated:**
+- `INFY_Investment_Report.md` (Complete analysis with citations)
+- `TCS_Investment_Report.md` (Complete analysis with citations)
+- Full chat conversation showing both analyses
 
 ### Working Demo Screenshots refer this below file
 [Demo Screenshots](./docs/DemoScreenshots.pdf)
+
+---
+
+## 🔧 Advanced Configuration
+
+### Model Selection
+
+The system uses **Gemini 2.5 Pro** for reasoning and complex analysis. You can modify the model by changing:
+
+```python
+# In agent.py
+MODEL_NAME = "gemini-2.5-pro"  # Current model
+
+# Alternative options:
+# MODEL_NAME = "gemini-2.0-flash"  # Faster, lower cost
+# MODEL_NAME = "gemini-3-pro-preview"  # Experimental
+```
+
+### Loop Iterations
+
+Maximum number of stocks to process:
+
+```python
+# In agent.py
+max_iterations=15  # Can process up to 15 stocks per session
+```
+
+### State Management
+
+The batch processor automatically clears these state variables each iteration:
+- `qualitative_findings`
+- `quantitative_findings`
+- `valuation_findings`
+- `cio_decision`
+- `last_research_data`
+
+This prevents context contamination and ensures fresh analysis for each stock.
 
 ---
 
@@ -745,14 +930,55 @@ This Stock Research Agent represents the frontier of AI in financial analysis. W
 
 ---
 
-**Last Updated**: November 29, 2025
-**Version**: 1.1
+**Last Updated**: December 19, 2025
+**Version**: 2.0
 **Status**: Educational & Demonstration
 
 ---
 
 ### Document Version History
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0 | 27-Nov-2025 | Initial release |
-| 1.1 | 29-Nov-2025 | Added Report Agent for Markdown report generation, updated architecture diagram to Mermaid format |
+
+| Version | Date | Key Changes | Highlights |
+|---------|------|------------|-----------|
+| 1.0 | 27-Nov-2025 | Initial release | Core multi-agent framework with 4-gate analysis pipeline |
+| 1.1 | 29-Nov-2025 | Added Report Agent | Markdown report generation, Mermaid architecture diagram |
+| **2.0** | **19-Dec-2025** | **Batch Processing & State Management** | **Multi-stock processing, LoopAgent orchestration, state clearing mechanism** |
+
+#### Version 2.0 Detailed Changes (19-Dec-2025)
+
+**Architecture Updates:**
+- ✅ Implemented **Sequential-Iterative Multi-Agent Architecture** with batch processing
+- ✅ Introduced **LoopAgent** for iterative stock processing
+- ✅ Added **Batch Processor Agent** for state management between iterations
+- ✅ Updated Mermaid diagram to show loop flow with ticket handoff
+
+**New Agents:**
+- ✅ **Stock Extractor Agent** (#6): Parses user input to extract multiple tickers
+- ✅ **Batch Processor Agent** (#7): Manages queue, clears state, prevents context contamination
+- ✅ **Root Orchestrator** (#8): Master controller for two-phase workflow (Extraction → Loop)
+
+**Workflow Enhancements:**
+- ✅ Support for **batch processing multiple stocks** in single session
+- ✅ **Per-iteration state clearing** to prevent AI hallucinations from previous analyses
+- ✅ **Individual report generation** for each stock (e.g., `INFY_Investment_Report.md`, `TCS_Investment_Report.md`)
+- ✅ Enhanced loop control with termination logic
+
+**Documentation Updates:**
+- ✅ Expanded "How to Use" section with batch processing examples
+- ✅ Added detailed execution flow diagram for multi-stock processing
+- ✅ Documented state variables managed by Batch Processor
+- ✅ Added "Advanced Configuration" section for model selection and loop settings
+- ✅ Enhanced Input Format section showing single vs. batch stock examples
+- ✅ Improved Output Format documentation reflecting per-stock report generation
+
+**Technical Improvements:**
+- ✅ `max_iterations=15`: Support for processing up to 15 stocks per session
+- ✅ Automatic state variable clearing: `qualitative_findings`, `quantitative_findings`, `valuation_findings`, `cio_decision`, `last_research_data`
+- ✅ Cleaner state management to reduce context bloat and API call waste
+
+**Backward Compatibility:**
+- ✅ Single stock analysis still fully supported (input: "Analyze INFY")
+- ✅ All existing agent functionality preserved
+- ✅ No breaking changes to core analysis gates or report generation
+
+---
